@@ -5,6 +5,7 @@ description = "Large language model module for K.ai system (part of Kaspar 2028)
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "open-webui>=0.9.2",
     "vllm[audio] ; sys_platform == 'linux'",
 ]
 
