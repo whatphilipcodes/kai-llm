@@ -3,8 +3,27 @@ name = "kai-llm"
 version = "0.1.0"
 description = "Large language model module for K.ai system (part of Kaspar 2028)"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
+dependencies = [
+    "vllm ; sys_platform == 'linux'",
+]
 
-[dependency-groups]
-linux = []
-universal = []
+
+[tool.uv]
+prerelease = "if-necessary-or-explicit"
+
+[tool.uv.sources]
+vllm = { index = "vllm-nightly" }
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+torchaudio = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "vllm-nightly"
+url = "https://wheels.vllm.ai/nightly/cu130"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
