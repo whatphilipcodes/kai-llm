@@ -11,6 +11,10 @@ def main():
         "8192",
         "--limit-mm-per-prompt",
         '{"image": 4, "audio": 1}',
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "30000",
     ]
 
     print("Starting vLLM server...")
