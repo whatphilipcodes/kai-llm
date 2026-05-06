@@ -8,3 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Webui
+dev/data
+.webui_secret_key

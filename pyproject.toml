@@ -3,15 +3,18 @@ name = "kai-llm"
 version = "0.1.0"
 description = "Large language model module for K.ai system (part of Kaspar 2028)"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = "==3.13.*"
 dependencies = [
-    "open-webui>=0.9.2",
-    "vllm[audio] ; sys_platform == 'linux'",
+    "audioop-lts>=0.2.2",
+    "vllm[audio]",
 ]
 
 
 [tool.uv]
 prerelease = "if-necessary-or-explicit"
+environments = [
+    "sys_platform == 'linux'",
+]
 
 [tool.uv.sources]
 vllm = { index = "vllm-nightly" }
