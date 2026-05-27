@@ -10,7 +10,7 @@ def main():
         "--max-model-len",
         "8192",
         "--limit-mm-per-prompt",
-        '{"image": 4, "audio": 1}',
+        '{"video": 1, "audio": 1}',
         "--host",
         "0.0.0.0",
         "--port",
