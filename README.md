@@ -22,3 +22,9 @@ https://developer.nvidia.com/cuda-downloads
 UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-358x9v61'}
   warnings.warn(
 ```
+
+- `Gemma 4 - unified (12B)` runs into a config issue with the current `transformers` version `5.10.2` requiring a manual override whenever the `.env` is rebuilt:
+
+```sh
+sed -i 's/config\.vision_config\.num_soft_tokens/getattr(config.vision_config, "num_soft_tokens", getattr(config.vision_config, "mm_posemb_size", 280))/g' .venv/lib/python3.13/site-packages/vllm/model_executor/models/gemma4_unified.py
+```
