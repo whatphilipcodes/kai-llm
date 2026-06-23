@@ -1,43 +1,48 @@
-import subprocess
+import asyncio
 import sys
 
+from src.kai_llm.utils.logger import get_logger, setup_logging
+from src.kai_llm.io.sender import Sender
+from src.kai_llm.io.receiver import Receiver
+from src.kai_llm.engine import LLMEngine
+from src.kai_llm.processor import StreamProcessor
+
+setup_logging()
+logger = get_logger(__name__)
+
+async def amain():
+    logger.critical("Launching kai_llm module...")
+    
+    # Initialize networking nodes
+    sender = Sender()
+    receiver = Receiver()
+    
+    # Initialize engine and processor
+    logger.info("Initializing vLLM engine...")
+    engine = LLMEngine()
+    
+    logger.info("Initializing processor...")
+    processor = StreamProcessor(receiver, sender, engine)
+    
+    # Start the components
+    receiver.start()
+    
+    try:
+        logger.info("Ready. Waiting for prompts. Press Ctrl+C to exit.")
+        await processor.start()
+    except asyncio.CancelledError:
+        logger.info("Shutdown signal received.")
+    finally:
+        processor.stop()
+        receiver.stop()
+        sender.close()
 
 def main():
-    command = [
-        "vllm",
-        "serve",
-        "google/gemma-4-E4B-it",
-        "--max-model-len",
-        "8192",
-        "--limit-mm-per-prompt",
-        '{"video": 1, "audio": 1}',
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "30000",
-    ]
-
-    print("Starting vLLM server...")
-
     try:
-        process = subprocess.Popen(command)
-        process.wait()
-
+        asyncio.run(amain())
     except KeyboardInterrupt:
-        print("\nInterrupt received. Allowing vLLM to clean up resources...")
-        try:
-            process.wait(timeout=20)
-        except subprocess.TimeoutExpired:
-            print("vLLM shutdown timed out. Forcing process kill...")
-            process.kill()
-            process.wait()
+        logger.info("Interrupted. Shutting down gracefully.")
         sys.exit(0)
-
-    except FileNotFoundError:
-        print("Error: The 'vllm' executable was not found.")
-        print("Ensure you are running this within your uv environment.")
-        sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
