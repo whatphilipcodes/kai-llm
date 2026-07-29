@@ -3,11 +3,9 @@ name = "kai-llm"
 version = "0.1.0"
 description = "Large language model module for K.ai system (part of Kaspar 2028)"
 readme = "README.md"
-requires-python = "==3.13.*"
+requires-python = "~=3.14.0"
 dependencies = [
-  "pydantic>=2.14.0a1",
-  "pydantic-settings>=2.14.1",
-  "pyzmq>=27.1.0",
+  "kai-shared",
   "vllm[audio]",
 ]
 
@@ -19,15 +17,10 @@ environments = [
 ]
 
 [tool.uv.sources]
-vllm = { index = "vllm-nightly" }
+kai-shared = { path = "./kai-shared", editable = true }
 torch = { index = "pytorch-cu130" }
 torchvision = { index = "pytorch-cu130" }
 torchaudio = { index = "pytorch-cu130" }
-
-[[tool.uv.index]]
-name = "vllm-nightly"
-url = "https://wheels.vllm.ai/nightly/cu130"
-explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-cu130"

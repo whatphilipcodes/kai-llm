@@ -12,3 +12,6 @@ wheels/
 # Webui
 dev/data
 .webui_secret_key
+
+# Config
+config.toml
