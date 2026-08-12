@@ -1,123 +1,86 @@
+import asyncio
+import json
+import re
+import time
+
 import uvloop
 from kai_shared.io.node import PipelineNode
-from kai_shared.utils.logger import setup_logging
+from kai_shared.schemata.ipc import TokenStreamMetadata
+from kai_shared.utils.logger import get_logger, setup_logging
+from pydantic import ValidationError
+from vllm import AsyncEngineArgs, AsyncLLMEngine, SamplingParams
 
 from src.kai_llm.config_llm import settings_llm
+
+logger = get_logger(__name__)
+
+
+class LLMNode(PipelineNode):
+    def __init__(self, config):
+        super().__init__(config)
+        engine_args_dict = settings_llm.vllm_config.model_dump(exclude_none=True)
+        engine_args = AsyncEngineArgs(**engine_args_dict)
+        self.engine = AsyncLLMEngine.from_engine_args(engine_args)
+
+    async def handle_reliable(self, payload: bytes) -> None:
+        meta_len = int.from_bytes(payload[:4], byteorder="big")
+        meta_json_str = payload[4 : 4 + meta_len].decode("utf-8")
+
+        try:
+            meta_dict = json.loads(meta_json_str)
+            if meta_dict.get("stream_type") != "token":
+                return
+            meta = TokenStreamMetadata(**meta_dict)
+        except ValidationError, json.JSONDecodeError:
+            return
+
+        prompt_text = payload[4 + meta_len :].decode("utf-8")
+        formatted_prompt = f"<bos><start_of_turn>user\n{prompt_text}<end_of_turn>\n<start_of_turn>model\n"
+
+        logger.info(f"Received text payload for LLM processing: '{prompt_text}'")
+        asyncio.create_task(
+            self._generate_and_stream(meta.request_id, formatted_prompt)
+        )
+
+    async def _generate_and_stream(self, request_id: str, prompt: str):
+        sampling_params = SamplingParams(
+            max_tokens=256, temperature=0.7, repetition_penalty=1.1
+        )
+        results_generator = self.engine.generate(
+            prompt, sampling_params, request_id=str(time.time())
+        )
+
+        previous_text = ""
+        buffer = ""
+
+        async for request_output in results_generator:
+            text = request_output.outputs[0].text
+            delta = text[len(previous_text) :]
+            previous_text = text
+            buffer += delta
+
+            is_final = request_output.finished
+
+            if re.search(r"[.!?\n]", buffer) or is_final:
+                if buffer.strip():
+                    logger.info(f"Emitting text chunk to TTS: '{buffer.strip()}'")
+                    out_meta = TokenStreamMetadata(
+                        request_id=request_id,
+                        is_final=is_final,
+                    )
+                    out_meta_json = out_meta.model_dump_json().encode("utf-8")
+                    out_meta_len = len(out_meta_json).to_bytes(4, byteorder="big")
+                    out_payload = out_meta_len + out_meta_json + buffer.encode("utf-8")
+
+                    await self.send_reliable(out_payload)
+                    buffer = ""
 
 
 async def main() -> None:
     setup_logging()
-    node = PipelineNode(settings_llm.shared)
+    node = LLMNode(settings_llm.shared)
     await node.run()
 
 
 if __name__ == "__main__":
     uvloop.run(main())
-
-
-# import asyncio
-# from collections.abc import AsyncGenerator
-# from typing import Any
-
-# from kai_shared.config_shared import SharedConfig
-# from kai_shared.io.node import PipelineNode
-# from kai_shared.schemata.ipc import StreamMetadata
-# from pydantic import ValidationError
-# from vllm.engine.arg_utils import AsyncEngineArgs
-# from vllm.engine.protocol import StreamingInput
-# from vllm.sampling_params import SamplingParams
-# from vllm.v1.engine.async_llm import AsyncLLM
-
-# from src.kai_llm.config_llm import settings_llm
-
-
-# class LLMNode(PipelineNode):
-#     def __init__(self, config: SharedConfig):
-#         super().__init__(config)
-#         self.engine: AsyncLLM | None = None
-#         self.active_queues: dict[str, asyncio.Queue[tuple[StreamMetadata, bytes]]] = {}
-
-#     async def start(self) -> None:
-#         engine_args_dict = settings_llm.vllm_config.model_dump(exclude_none=True)
-#         engine_args = AsyncEngineArgs(**engine_args_dict)
-#         self.engine = AsyncLLM.from_engine_args(engine_args)
-#         await super().start()
-
-#     async def handle_data(
-#         self, topic: bytes, metadata_bytes: bytes, payload: bytes
-#     ) -> None:
-#         try:
-#             metadata = StreamMetadata.model_validate_json(metadata_bytes)
-#         except ValidationError:
-#             return
-
-#         if metadata.stream_type != "audio":
-#             return
-
-#         req_id = metadata.request_id
-#         if req_id not in self.active_queues:
-#             queue: asyncio.Queue[tuple[StreamMetadata, bytes]] = asyncio.Queue()
-#             self.active_queues[req_id] = queue
-#             asyncio.create_task(self._process_stream(req_id, queue))
-#         else:
-#             queue = self.active_queues[req_id]
-
-#         await queue.put((metadata, payload))
-
-#     async def _input_generator(
-#         self, req_id: str, queue: asyncio.Queue[tuple[StreamMetadata, bytes]]
-#     ) -> AsyncGenerator[StreamingInput]:
-#         while True:
-#             metadata, payload = await queue.get()
-
-#             prompt_data: Any = {
-#                 "prompt": "<|audio|>",
-#                 "multi_modal_data": {"audio": payload},
-#             }
-
-#             yield StreamingInput(prompt=prompt_data)
-
-#             if metadata.is_final:
-#                 break
-
-#     async def _process_stream(
-#         self, req_id: str, queue: asyncio.Queue[tuple[StreamMetadata, bytes]]
-#     ) -> None:
-#         if self.engine is None:
-#             raise RuntimeError("Engine is not initialized.")
-
-#         sampling_params = SamplingParams(max_tokens=1)
-
-#         try:
-#             output_generator = self.engine.generate(
-#                 prompt=self._input_generator(req_id, queue),
-#                 sampling_params=sampling_params,
-#                 request_id=req_id,
-#             )
-
-#             async for output in output_generator:
-#                 if output.outputs:
-#                     token_text = output.outputs[0].text
-#                     is_final = output.finished
-#                     out_meta = StreamMetadata(
-#                         request_id=req_id, is_final=is_final, stream_type="token"
-#                     )
-#                     await self.publisher.send_stream(
-#                         topic=b"llm_output",
-#                         metadata=out_meta,
-#                         payload=token_text.encode("utf-8"),
-#                     )
-#                     if is_final:
-#                         break
-#         finally:
-#             if req_id in self.active_queues:
-#                 del self.active_queues[req_id]
-
-
-# async def main() -> None:
-#     node = LLMNode(settings_llm.shared)
-#     await node.run()
-
-
-# if __name__ == "__main__":
-#     asyncio.run(main())
