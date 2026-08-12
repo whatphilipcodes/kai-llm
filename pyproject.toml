@@ -27,3 +27,9 @@ torchaudio = { index = "pytorch-cu130" }
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
 explicit = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.2",
+    "ty>=0.0.70",
+]
