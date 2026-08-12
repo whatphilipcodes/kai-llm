@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = "~=3.14.0"
 dependencies = [
   "kai-shared",
+  "uvloop>=0.22.1",
   "vllm[audio]",
 ]
 
