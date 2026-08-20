@@ -9,12 +9,14 @@ from pydantic_settings import (
 
 
 class VLLMConfig(BaseModel):
-    model: str = "google/gemma-4-E4B-it-qat-w4a16-ct"
+    # model: str = "google/gemma-4-E4B-it-qat-w4a16-ct" # small (bad)
+    # model: str = "google/gemma-4-12B-it-qat-w4a16-ct" # medium ()
+    model: str = "google/gemma-4-31B-it-qat-w4a16-ct"  # large (slow)
     tensor_parallel_size: int = 1
     max_num_batched_tokens: int = 8192
     max_model_len: int | None = 4096
-    limit_mm_per_prompt: dict[str, int] = {"video": 1, "audio": 1}
-    gpu_memory_utilization: float = 0.2
+    # limit_mm_per_prompt: dict[str, int] = {"video": 1, "audio": 1}
+    gpu_memory_utilization: float = 0.3
 
 
 class LLMConfig(BaseSettings):
